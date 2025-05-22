@@ -710,37 +710,200 @@
             }
         }
 
-        // Simulate data fetching (replace with actual API calls)
-        function fetchSensorData() {
-            // Simulate realistic sensor data with some variation
+        // API Configuration
+        const API_CONFIG = {
+            baseUrl: 'http://52.184.14.252:8080',
+            deviceId: 'e8ff8480-eccb-11ee-a39c-0f270afb2199',
+            credentials: {
+                username: 'user@keystone.com',
+                password: 'springbreak'
+            }
+        };
+
+        // Global variables
+        let authToken = null;
+        let tokenExpiry = null;
+
+        // Login to ThingsBoard and get authentication token
+        async function login() {
+            try {
+                const response = await fetch(`${API_CONFIG.baseUrl}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(API_CONFIG.credentials)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    tokenExpiry = Date.now() + (12 * 60 * 60 * 1000); // Token valid for 12 hours
+                    console.log('✅ Successfully logged in to ThingsBoard');
+                    return true;
+                } else {
+                    const error = await response.json();
+                    console.error('❌ Login failed:', error.message);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Login error:', error);
+                return false;
+            }
+        }
+
+        // Check if token is valid
+        function isTokenValid() {
+            return authToken && tokenExpiry && Date.now() < tokenExpiry;
+        }
+
+        // Fetch sensor data from ThingsBoard
+        async function fetchRealSensorData() {
+            try {
+                // Check if we need to login or refresh token
+                if (!isTokenValid()) {
+                    console.log('🔄 Token expired or missing, logging in...');
+                    const loginSuccess = await login();
+                    if (!loginSuccess) {
+                        throw new Error('Failed to authenticate with ThingsBoard');
+                    }
+                }
+
+                // Calculate time range (last 7 days to now)
+                const endTs = Date.now();
+                const startTs = endTs - (7 * 24 * 60 * 60 * 1000); // 7 days ago
+
+                // Fetch telemetry data
+                const url = `${API_CONFIG.baseUrl}/api/plugins/telemetry/DEVICE/${API_CONFIG.deviceId}/values/timeseries`;
+                const params = new URLSearchParams({
+                    keys: 'CO2,Temperature,Humidity,TVOC',
+                    startTs: startTs.toString(),
+                    endTs: endTs.toString(),
+                    limit: '1'
+                });
+
+                const response = await fetch(`${url}?${params}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const rawData = await response.json();
+                    return formatThingsBoardData(rawData);
+                } else {
+                    const error = await response.json();
+                    console.error('❌ API Error:', error);
+                    throw new Error(`API Error: ${error.message || 'Unknown error'}`);
+                }
+
+            } catch (error) {
+                console.error('❌ Error fetching sensor data:', error);
+                // Fall back to simulated data if API fails
+                return generateSimulatedData();
+            }
+        }
+
+        // Format ThingsBoard API response
+        function formatThingsBoardData(data) {
+            const result = {};
+            let timestamp = Date.now();
+
+            // Process each sensor type
+            Object.keys(data).forEach(key => {
+                if (data[key] && data[key].length > 0) {
+                    // Get the most recent value
+                    const latestReading = data[key][0];
+                    result[key] = parseFloat(latestReading.value);
+                    timestamp = latestReading.ts;
+                }
+            });
+
+            result.Timestamp = timestamp;
+            
+            // Log successful data fetch
+            console.log('📊 Real sensor data:', result);
+            
+            return result;
+        }
+
+        // Fallback: Generate simulated data if API fails
+        function generateSimulatedData() {
             const now = Date.now();
-            const data = {
+            return {
                 CO2: 400 + Math.random() * 800 + Math.sin(now / 100000) * 200,
                 Temperature: 22 + Math.random() * 6 + Math.sin(now / 80000) * 3,
                 Humidity: 50 + Math.random() * 20 + Math.sin(now / 120000) * 15,
                 TVOC: 300 + Math.random() * 1200 + Math.sin(now / 90000) * 400,
                 Timestamp: now
             };
+        }
 
-            updateMetrics(data);
-            addDataPoint(data);
+        // Main data fetching function
+        async function fetchSensorData() {
+            try {
+                const data = await fetchRealSensorData();
+                
+                // Validate data
+                if (data && typeof data === 'object' && Object.keys(data).length > 1) {
+                    updateMetrics(data);
+                    addDataPoint(data);
+                    
+                    // Update connection status
+                    updateConnectionStatus(true);
+                } else {
+                    console.warn('⚠️ Invalid data received, using simulated data');
+                    const simulatedData = generateSimulatedData();
+                    updateMetrics(simulatedData);
+                    addDataPoint(simulatedData);
+                    updateConnectionStatus(false);
+                }
+            } catch (error) {
+                console.error('❌ Failed to fetch sensor data:', error);
+                
+                // Use simulated data as fallback
+                const simulatedData = generateSimulatedData();
+                updateMetrics(simulatedData);
+                addDataPoint(simulatedData);
+                updateConnectionStatus(false);
+            }
+        }
+
+        // Update connection status indicator
+        function updateConnectionStatus(isConnected) {
+            const statusDot = document.querySelector('.status-dot');
+            const statusText = document.querySelector('.status span');
+            
+            if (isConnected) {
+                statusDot.style.background = '#4CAF50';
+                statusText.textContent = 'Live Data Feed';
+            } else {
+                statusDot.style.background = '#FF9800';
+                statusText.textContent = 'Simulated Data (API Offline)';
+            }
         }
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             // Add small delay to ensure all elements are rendered
-            setTimeout(() => {
-                console.log('Initializing charts...');
+            setTimeout(async () => {
+                console.log('🚀 Initializing Environmental Sensor Dashboard...');
                 initCharts();
                 
                 // Verify charts were created
-                console.log('Charts created:', Object.keys(charts));
+                console.log('📊 Charts created:', Object.keys(charts));
                 
-                // Initial data fetch
-                fetchSensorData();
+                // Initial login and data fetch
+                console.log('🔐 Connecting to ThingsBoard API...');
+                await fetchSensorData();
                 
                 // Set up periodic updates (every 5 seconds to match your Python script)
                 setInterval(fetchSensorData, 5000);
+                
+                console.log('✅ Dashboard initialized successfully');
             }, 100);
         });
     </script>
