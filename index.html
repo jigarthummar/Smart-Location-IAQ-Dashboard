@@ -831,16 +831,16 @@
         }
 
         // Fallback: Generate simulated data if API fails
-        function generateSimulatedData() {
-            const now = Date.now();
-            return {
-                CO2: 400 + Math.random() * 800 + Math.sin(now / 100000) * 200,
-                Temperature: 22 + Math.random() * 6 + Math.sin(now / 80000) * 3,
-                Humidity: 50 + Math.random() * 20 + Math.sin(now / 120000) * 15,
-                TVOC: 300 + Math.random() * 1200 + Math.sin(now / 90000) * 400,
-                Timestamp: now
-            };
-        }
+        // function generateSimulatedData() {
+        //     const now = Date.now();
+        //     return {
+        //         CO2: 400 + Math.random() * 800 + Math.sin(now / 100000) * 200,
+        //         Temperature: 22 + Math.random() * 6 + Math.sin(now / 80000) * 3,
+        //         Humidity: 50 + Math.random() * 20 + Math.sin(now / 120000) * 15,
+        //         TVOC: 300 + Math.random() * 1200 + Math.sin(now / 90000) * 400,
+        //         Timestamp: now
+        //     };
+        // }
 
         // Main data fetching function
         async function fetchSensorData() {
@@ -856,19 +856,19 @@
                     updateConnectionStatus(true);
                 } else {
                     console.warn('⚠️ Invalid data received, using simulated data');
-                    const simulatedData = generateSimulatedData();
-                    updateMetrics(simulatedData);
-                    addDataPoint(simulatedData);
-                    updateConnectionStatus(false);
+                    // const simulatedData = generateSimulatedData();
+                    // updateMetrics(simulatedData);
+                    // addDataPoint(simulatedData);
+                    // updateConnectionStatus(false);
                 }
             } catch (error) {
                 console.error('❌ Failed to fetch sensor data:', error);
                 
                 // Use simulated data as fallback
-                const simulatedData = generateSimulatedData();
-                updateMetrics(simulatedData);
-                addDataPoint(simulatedData);
-                updateConnectionStatus(false);
+                // const simulatedData = generateSimulatedData();
+                // updateMetrics(simulatedData);
+                // addDataPoint(simulatedData);
+                // updateConnectionStatus(false);
             }
         }
 
